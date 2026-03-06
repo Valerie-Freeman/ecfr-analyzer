@@ -1,6 +1,7 @@
+import hashlib
 from collections import defaultdict
-from unittest.mock import patch, Mock
-from api.pipeline import _add_cfr_refs, _find_nodes, process_title_content, process_title_versions
+from unittest.mock import patch, Mock, MagicMock, call
+from api.pipeline import _add_cfr_refs, _find_nodes, process_title_content, process_title_versions, run_pipeline
 
 
 class TestAddCfrRefs:
@@ -312,3 +313,212 @@ class TestProcessTitleVersions:
 
         result = self._run(versions, agency_map)
         assert result == {}
+
+
+# --- Step 5: Pipeline orchestration tests ---
+
+class TestChecksumConsistency:
+    """Checksums must be deterministic and sensitive to any text change."""
+
+    def test_same_text_same_checksum(self):
+        text = "federal regulation text"
+        hash1 = hashlib.sha256(text.encode()).hexdigest()
+        hash2 = hashlib.sha256(text.encode()).hexdigest()
+        assert hash1 == hash2
+
+    def test_different_text_different_checksum(self):
+        hash1 = hashlib.sha256("version one".encode()).hexdigest()
+        hash2 = hashlib.sha256("version two".encode()).hexdigest()
+        assert hash1 != hash2
+
+    def test_checksum_is_64_char_hex(self):
+        result = hashlib.sha256("test".encode()).hexdigest()
+        assert len(result) == 64
+        assert all(c in "0123456789abcdef" for c in result)
+
+
+def _mock_conn():
+    """Create a mock database connection with cursor context manager."""
+    mock_cursor = MagicMock()
+    mock_conn = MagicMock()
+    mock_conn.__enter__ = Mock(return_value=mock_conn)
+    mock_conn.__exit__ = Mock(return_value=False)
+    mock_conn.cursor.return_value.__enter__ = Mock(return_value=mock_cursor)
+    mock_conn.cursor.return_value.__exit__ = Mock(return_value=False)
+    return mock_conn, mock_cursor
+
+
+class TestRunPipelineAggregation:
+    """run_pipeline merges partial results from multiple titles correctly."""
+
+    def _run_with_mocks(self, title_metadata, content_by_title, versions_by_title,
+                        stored_metadata=None, full_refresh=True):
+        """Run run_pipeline with all external calls mocked."""
+        agency_map = defaultdict(list)
+
+        mock_conn, mock_cursor = _mock_conn()
+        # stored metadata query returns empty by default (first run)
+        mock_cursor.fetchall.return_value = [
+            (t, d) for t, d in (stored_metadata or {}).items()
+        ]
+
+        def mock_content(title_number, date, amap):
+            return content_by_title.get(title_number, {})
+
+        def mock_versions(title_number, date, amap):
+            return versions_by_title.get(title_number, {})
+
+        with patch("api.pipeline.fetch_agencies", return_value=agency_map), \
+             patch("api.pipeline.fetch_title_metadata", return_value=title_metadata), \
+             patch("api.pipeline.process_title_content", side_effect=mock_content), \
+             patch("api.pipeline.process_title_versions", side_effect=mock_versions), \
+             patch("api.pipeline.get_conn", return_value=mock_conn):
+            run_pipeline(full_refresh=full_refresh)
+
+        return mock_cursor
+
+    def test_word_counts_summed_across_titles(self):
+        """Agency spanning two titles gets combined word count."""
+        title_metadata = {
+            1: {"up_to_date_as_of": "2026-01-01", "latest_amended_on": "2026-01-01"},
+            2: {"up_to_date_as_of": "2026-01-01", "latest_amended_on": "2026-01-01"},
+        }
+        content_by_title = {
+            1: {"epa": {"word_count": 100, "text": "title one text"}},
+            2: {"epa": {"word_count": 200, "text": "title two text"}},
+        }
+
+        cursor = self._run_with_mocks(title_metadata, content_by_title, {})
+
+        # find the word_counts INSERT for epa
+        word_count_inserts = [
+            c for c in cursor.execute.call_args_list
+            if c[0][0].strip().startswith("INSERT INTO word_counts")
+        ]
+        assert len(word_count_inserts) == 1
+        assert word_count_inserts[0][0][1] == ("epa", 300)
+
+    def test_checksums_computed_from_combined_text(self):
+        """Checksum reflects text from all titles, not just one."""
+        title_metadata = {
+            1: {"up_to_date_as_of": "2026-01-01", "latest_amended_on": "2026-01-01"},
+            2: {"up_to_date_as_of": "2026-01-01", "latest_amended_on": "2026-01-01"},
+        }
+        content_by_title = {
+            1: {"epa": {"word_count": 10, "text": "part one"}},
+            2: {"epa": {"word_count": 10, "text": "part two"}},
+        }
+
+        cursor = self._run_with_mocks(title_metadata, content_by_title, {})
+
+        expected_checksum = hashlib.sha256("part onepart two".encode()).hexdigest()
+        checksum_inserts = [
+            c for c in cursor.execute.call_args_list
+            if c[0][0].strip().startswith("INSERT INTO checksums")
+        ]
+        assert len(checksum_inserts) == 1
+        assert checksum_inserts[0][0][1] == ("epa", expected_checksum)
+
+    def test_change_history_merged_across_titles(self):
+        """Same agency + period from different titles sums counts."""
+        title_metadata = {
+            1: {"up_to_date_as_of": "2026-01-01", "latest_amended_on": "2026-01-01"},
+            2: {"up_to_date_as_of": "2026-01-01", "latest_amended_on": "2026-01-01"},
+        }
+        versions_by_title = {
+            1: {"epa": {"2024-03": {"substantive": 3, "non_substantive": 1, "removals": 0}}},
+            2: {"epa": {"2024-03": {"substantive": 2, "non_substantive": 0, "removals": 1}}},
+        }
+
+        cursor = self._run_with_mocks(title_metadata, {}, versions_by_title)
+
+        history_inserts = [
+            c for c in cursor.execute.call_args_list
+            if c[0][0].strip().startswith("INSERT INTO change_history")
+        ]
+        assert len(history_inserts) == 1
+        # (slug, period, substantive, non_substantive, removals)
+        assert history_inserts[0][0][1] == ("epa", "2024-03", 5, 1, 1)
+
+    def test_old_data_deleted_before_insert(self):
+        """DELETE runs for all three metric tables before any INSERTs."""
+        title_metadata = {
+            1: {"up_to_date_as_of": "2026-01-01", "latest_amended_on": "2026-01-01"},
+        }
+        content_by_title = {
+            1: {"epa": {"word_count": 50, "text": "some text"}},
+        }
+
+        cursor = self._run_with_mocks(title_metadata, content_by_title, {})
+
+        executed_sql = [c[0][0].strip() for c in cursor.execute.call_args_list]
+        delete_indices = [i for i, sql in enumerate(executed_sql) if sql.startswith("DELETE")]
+        insert_indices = [i for i, sql in enumerate(executed_sql) if sql.startswith("INSERT")]
+
+        # all DELETEs happen before any INSERTs
+        assert max(delete_indices) < min(insert_indices)
+
+
+class TestRunPipelineIncrementalRefresh:
+    """Incremental refresh skips processing when nothing has changed."""
+
+    def test_skips_when_nothing_changed(self):
+        """No titles processed when all latest_amended_on dates match."""
+        title_metadata = {
+            1: {"up_to_date_as_of": "2026-01-01", "latest_amended_on": "2025-06-15"},
+        }
+        stored = {1: "2025-06-15"}
+
+        mock_conn, mock_cursor = _mock_conn()
+        mock_cursor.fetchall.return_value = [(1, "2025-06-15")]
+
+        mock_content = Mock()
+
+        with patch("api.pipeline.fetch_agencies", return_value=defaultdict(list)), \
+             patch("api.pipeline.fetch_title_metadata", return_value=title_metadata), \
+             patch("api.pipeline.process_title_content", mock_content), \
+             patch("api.pipeline.process_title_versions", Mock()), \
+             patch("api.pipeline.get_conn", return_value=mock_conn):
+            run_pipeline(full_refresh=False)
+
+        mock_content.assert_not_called()
+
+    def test_processes_when_title_changed(self):
+        """Titles processed when latest_amended_on differs from stored."""
+        title_metadata = {
+            1: {"up_to_date_as_of": "2026-01-01", "latest_amended_on": "2026-01-01"},
+        }
+
+        mock_conn, mock_cursor = _mock_conn()
+        mock_cursor.fetchall.return_value = [(1, "2025-06-15")]
+
+        mock_content = Mock(return_value={})
+
+        with patch("api.pipeline.fetch_agencies", return_value=defaultdict(list)), \
+             patch("api.pipeline.fetch_title_metadata", return_value=title_metadata), \
+             patch("api.pipeline.process_title_content", mock_content), \
+             patch("api.pipeline.process_title_versions", Mock(return_value={})), \
+             patch("api.pipeline.get_conn", return_value=mock_conn):
+            run_pipeline(full_refresh=False)
+
+        mock_content.assert_called_once()
+
+    def test_full_refresh_bypasses_check(self):
+        """full_refresh=True processes even when nothing has changed."""
+        title_metadata = {
+            1: {"up_to_date_as_of": "2026-01-01", "latest_amended_on": "2025-06-15"},
+        }
+
+        mock_conn, mock_cursor = _mock_conn()
+        mock_cursor.fetchall.return_value = [(1, "2025-06-15")]
+
+        mock_content = Mock(return_value={})
+
+        with patch("api.pipeline.fetch_agencies", return_value=defaultdict(list)), \
+             patch("api.pipeline.fetch_title_metadata", return_value=title_metadata), \
+             patch("api.pipeline.process_title_content", mock_content), \
+             patch("api.pipeline.process_title_versions", Mock(return_value={})), \
+             patch("api.pipeline.get_conn", return_value=mock_conn):
+            run_pipeline(full_refresh=True)
+
+        mock_content.assert_called_once()

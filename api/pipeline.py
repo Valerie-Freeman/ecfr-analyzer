@@ -154,7 +154,7 @@ def process_title_versions(title_number, date, agency_map):
     """
     part_map = fetch_titles_structure(title_number, date)
 
-    response = httpx.get(f"{ECFR_BASE_URL}/api/versioner/v1/versions/title-{title_number}.json")
+    response = httpx.get(f"{ECFR_BASE_URL}/api/versioner/v1/versions/title-{title_number}.json", timeout=120.0)
     response.raise_for_status()
     data = response.json()
 
@@ -180,3 +180,89 @@ def process_title_versions(title_number, date, agency_map):
                 results[slug][period]["non_substantive"] += 1
 
     return dict(results)
+
+def run_pipeline(full_refresh=False):
+    agency_map = fetch_agencies()
+    title_metadata = fetch_title_metadata()
+
+    # check what we've already processed to skip unchanged titles
+    stored_metadata = {}
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT title_number, latest_amended_on FROM pipeline_metadata")
+            for row in cur.fetchall():
+                stored_metadata[row[0]] = row[1]
+
+    # skip processing if nothing has changed since last run
+    if not full_refresh:
+        has_changes = any(
+            stored_metadata.get(t) != dates["latest_amended_on"]
+            for t, dates in title_metadata.items()
+        )
+        if not has_changes:
+            return
+
+    agency_text_data = defaultdict(lambda: {"word_count": 0, "text": ""})
+    agency_history = defaultdict(lambda: defaultdict(lambda: {"substantive": 0, "non_substantive": 0, "removals": 0}))
+
+    for title_number, title_dates in title_metadata.items():
+
+        # title content for word count and text concatenation for checksum per agency
+        title_content = process_title_content(title_number, title_dates["up_to_date_as_of"], agency_map)
+
+        for slug, text_data in title_content.items():
+            agency_text_data[slug]["word_count"] += text_data["word_count"]
+            agency_text_data[slug]["text"] += text_data["text"]
+
+        # title versions for change history per agency
+        title_versions = process_title_versions(title_number, title_dates["up_to_date_as_of"], agency_map)
+
+        for slug, period_history in title_versions.items():
+            for period, change_counts in period_history.items():
+                agency_history[slug][period]["substantive"] += change_counts["substantive"]
+                agency_history[slug][period]["non_substantive"] += change_counts["non_substantive"]
+                agency_history[slug][period]["removals"] += change_counts["removals"]
+            
+    for slug, text_data in agency_text_data.items():
+        # create the checksum of the full, concatenated text for each agency
+        text_data["checksum"] = hashlib.sha256(text_data["text"].encode()).hexdigest()
+
+    # write all computed metrics to the database in a single transaction
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            # clear old data so we don't accumulate duplicate rows
+            cur.execute("DELETE FROM word_counts")
+            cur.execute("DELETE FROM checksums")
+            cur.execute("DELETE FROM change_history")
+
+            for slug, text_data in agency_text_data.items():
+                cur.execute(
+                    "INSERT INTO word_counts (agency_slug, word_count) VALUES (%s, %s)",
+                    (slug, text_data["word_count"]),
+                )
+                cur.execute(
+                    "INSERT INTO checksums (agency_slug, checksum) VALUES (%s, %s)",
+                    (slug, text_data["checksum"]),
+                )
+
+            for slug, periods in agency_history.items():
+                for period, counts in periods.items():
+                    cur.execute(
+                        """INSERT INTO change_history
+                           (agency_slug, period, substantive, non_substantive, removals)
+                           VALUES (%s, %s, %s, %s, %s)""",
+                        (slug, period, counts["substantive"], counts["non_substantive"], counts["removals"]),
+                    )
+
+            # record what we processed so incremental refresh knows what's current
+            for title_number, title_dates in title_metadata.items():
+                cur.execute(
+                    """INSERT INTO pipeline_metadata (title_number, latest_amended_on, last_fetched_at)
+                       VALUES (%s, %s, NOW())
+                       ON CONFLICT (title_number) DO UPDATE
+                       SET latest_amended_on = EXCLUDED.latest_amended_on,
+                           last_fetched_at = NOW()""",
+                    (title_number, title_dates["latest_amended_on"]),
+                )
+
+        conn.commit()
