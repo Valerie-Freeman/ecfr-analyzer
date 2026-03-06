@@ -1,6 +1,6 @@
 import hashlib
-import io
 import logging
+import tempfile
 import xml.etree.ElementTree as ET
 
 import httpx
@@ -127,29 +127,33 @@ def process_title_content(title_number, date, agency_map):
 
     results = defaultdict(lambda: {"word_count": 0, "text": ""})
 
-    # iterparse streams through the XML instead of loading the full tree.
-    # "end" events fire when an element's closing tag is reached, so the
-    # full subtree is available for itertext(). After processing, clear()
-    # frees that subtree's memory.
-    for event, elem in ET.iterparse(io.BytesIO(response.content), events=("end",)):
-        if elem.tag != "DIV3":
-            continue
-        if elem.get("TYPE") != "CHAPTER":
+    # Write XML to a temp file and free response from memory, then
+    # stream-parse from disk. This keeps memory bounded: the XML bytes
+    # live on disk, and iterparse only builds one chapter's tree at a time.
+    with tempfile.TemporaryFile() as tmp:
+        tmp.write(response.content)
+        del response
+        tmp.seek(0)
+
+        for event, elem in ET.iterparse(tmp, events=("end",)):
+            if elem.tag != "DIV3":
+                continue
+            if elem.get("TYPE") != "CHAPTER":
+                elem.clear()
+                continue
+            chapter = elem.get("N")
+            if not chapter:
+                elem.clear()
+                continue
+
+            text = " ".join(elem.itertext())
+            key = (title_number, chapter)
+
+            for slug in agency_map.get(key, []):
+                results[slug]["word_count"] += len(text.split())
+                results[slug]["text"] += text
+
             elem.clear()
-            continue
-        chapter = elem.get("N")
-        if not chapter:
-            elem.clear()
-            continue
-
-        text = " ".join(elem.itertext())
-        key = (title_number, chapter)
-
-        for slug in agency_map.get(key, []):
-            results[slug]["word_count"] += len(text.split())
-            results[slug]["text"] += text
-
-        elem.clear()
 
     return dict(results)
 
