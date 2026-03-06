@@ -64,24 +64,26 @@ def _mock_get(xml_text):
 
 
 class TestProcessTitleContent:
-    # Single chapter mapped to one agency returns correct word count and text
+    # Single chapter mapped to one agency returns correct word count
     def test_single_chapter_single_agency(self):
         xml = _make_xml(("I", "hello world foo bar"))
         agency_map = {(1, "I"): ["test-agency"]}
+        hashers = defaultdict(hashlib.sha256)
 
         with patch("api.pipeline.httpx.get", _mock_get(xml)):
-            results = process_title_content(1, "2026-01-01", agency_map)
+            results = process_title_content(1, "2026-01-01", agency_map, hashers)
 
-        assert "test-agency" in results
-        assert results["test-agency"]["word_count"] == 4
+        assert results["test-agency"] == 4
+        assert "test-agency" in hashers
 
     # Chapter with no matching agency produces no results
     def test_unmatched_chapter_skipped(self):
         xml = _make_xml(("V", "some regulation text"))
         agency_map = {}  # no agencies mapped
+        hashers = defaultdict(hashlib.sha256)
 
         with patch("api.pipeline.httpx.get", _mock_get(xml)):
-            results = process_title_content(1, "2026-01-01", agency_map)
+            results = process_title_content(1, "2026-01-01", agency_map, hashers)
 
         assert results == {}
 
@@ -89,13 +91,13 @@ class TestProcessTitleContent:
     def test_multiple_chapters_same_agency(self):
         xml = _make_xml(("I", "one two three"), ("II", "four five"))
         agency_map = {(1, "I"): ["epa"], (1, "II"): ["epa"]}
+        hashers = defaultdict(hashlib.sha256)
 
         with patch("api.pipeline.httpx.get", _mock_get(xml)):
-            results = process_title_content(1, "2026-01-01", agency_map)
+            results = process_title_content(1, "2026-01-01", agency_map, hashers)
 
-        assert results["epa"]["word_count"] == 5
-        assert "one two three" in results["epa"]["text"]
-        assert "four five" in results["epa"]["text"]
+        assert results["epa"] == 5
+        assert "epa" in hashers
 
     # DIV3 elements with TYPE other than CHAPTER are ignored
     def test_non_chapter_div3_ignored(self):
@@ -104,24 +106,25 @@ class TestProcessTitleContent:
         xml += '<DIV3 TYPE="CHAPTER" N="I"><P>keep this</P></DIV3>'
         xml += "</DIV1></ECFR>"
         agency_map = {(1, "I"): ["test-agency"]}
+        hashers = defaultdict(hashlib.sha256)
 
         with patch("api.pipeline.httpx.get", _mock_get(xml)):
-            results = process_title_content(1, "2026-01-01", agency_map)
+            results = process_title_content(1, "2026-01-01", agency_map, hashers)
 
-        assert results["test-agency"]["word_count"] == 2
-        assert "ignore" not in results["test-agency"]["text"]
+        assert results["test-agency"] == 2
 
-    # Chapter shared by two agencies gives both the same word count and text
+    # Chapter shared by two agencies gives both the same word count and hash
     def test_chapter_shared_by_multiple_agencies(self):
         xml = _make_xml(("III", "shared regulation text here"))
         agency_map = {(1, "III"): ["agency-a", "agency-b"]}
+        hashers = defaultdict(hashlib.sha256)
 
         with patch("api.pipeline.httpx.get", _mock_get(xml)):
-            results = process_title_content(1, "2026-01-01", agency_map)
+            results = process_title_content(1, "2026-01-01", agency_map, hashers)
 
-        assert results["agency-a"]["word_count"] == 4
-        assert results["agency-b"]["word_count"] == 4
-        assert results["agency-a"]["text"] == results["agency-b"]["text"]
+        assert results["agency-a"] == 4
+        assert results["agency-b"] == 4
+        assert hashers["agency-a"].hexdigest() == hashers["agency-b"].hexdigest()
 
 
 class TestFindNodes:
@@ -363,8 +366,14 @@ class TestRunPipelineAggregation:
             (t, d) for t, d in (stored_metadata or {}).items()
         ]
 
-        def mock_content(title_number, date, amap):
-            return content_by_title.get(title_number, {})
+        def mock_content(title_number, date, amap, agency_hashers):
+            data = content_by_title.get(title_number, {})
+            result = {}
+            for slug, info in data.items():
+                result[slug] = info["word_count"]
+                if "text" in info:
+                    agency_hashers[slug].update(info["text"].encode())
+            return result
 
         def mock_versions(title_number, date, amap):
             return versions_by_title.get(title_number, {})

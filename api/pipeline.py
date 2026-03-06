@@ -112,12 +112,12 @@ def fetch_titles_structure(title_number, date):
     return part_map
 
 
-def process_title_content(title_number, date, agency_map):
+def process_title_content(title_number, date, agency_map, agency_hashers):
     """Fetch XML for a title, parse chapters, compute word counts per agency.
 
-    Returns {agency_slug: {"word_count": int, "text": str}} with partial
-    results for this title. Uses iterparse for memory-efficient streaming
-    so large titles (e.g., Title 7 Agriculture) don't exceed Render's 512MB.
+    Returns {agency_slug: word_count}. Updates agency_hashers in-place so
+    text is hashed per-chapter and never accumulated in memory. Uses iterparse
+    and a temp file so large titles don't blow up memory on Render.
     """
     response = httpx.get(
         f"{ECFR_BASE_URL}/api/versioner/v1/full/{date}/title-{title_number}.xml",
@@ -125,7 +125,7 @@ def process_title_content(title_number, date, agency_map):
     )
     response.raise_for_status()
 
-    results = defaultdict(lambda: {"word_count": 0, "text": ""})
+    results = defaultdict(int)
 
     # Write XML to a temp file and free response from memory, then
     # stream-parse from disk. This keeps memory bounded: the XML bytes
@@ -150,8 +150,8 @@ def process_title_content(title_number, date, agency_map):
             key = (title_number, chapter)
 
             for slug in agency_map.get(key, []):
-                results[slug]["word_count"] += len(text.split())
-                results[slug]["text"] += text
+                results[slug] += len(text.split())
+                agency_hashers[slug].update(text.encode())
 
             elem.clear()
 
@@ -222,12 +222,11 @@ def run_pipeline(full_refresh=False):
     for i, (title_number, title_dates) in enumerate(title_metadata.items(), 1):
         logger.info("Processing title %d (%d/%d)", title_number, i, len(title_metadata))
 
-        # title content for word count; text is hashed incrementally then discarded
-        title_content = process_title_content(title_number, title_dates["up_to_date_as_of"], agency_map)
+        # title content for word count; hashers are updated inside the function
+        title_content = process_title_content(title_number, title_dates["up_to_date_as_of"], agency_map, agency_hashers)
 
-        for slug, text_data in title_content.items():
-            agency_word_counts[slug] += text_data["word_count"]
-            agency_hashers[slug].update(text_data["text"].encode())
+        for slug, word_count in title_content.items():
+            agency_word_counts[slug] += word_count
 
         # title versions for change history per agency
         title_versions = process_title_versions(title_number, title_dates["up_to_date_as_of"], agency_map)
