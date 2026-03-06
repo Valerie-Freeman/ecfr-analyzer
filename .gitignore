@@ -1,6 +1,10 @@
 dev-docs/
 .claude/
 
+# Frontend
+node_modules/
+static/
+
 # Python
 __pycache__/
 *.pyc
