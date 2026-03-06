@@ -4,6 +4,9 @@ from psycopg2.pool import SimpleConnectionPool
 from contextlib import contextmanager 
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://ecfr:ecfr@localhost:5432/ecfr_analyzer")
+# Render's managed PostgreSQL uses postgres:// but psycopg2 requires postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 _pool = None
 
 def get_pool():
