@@ -19,6 +19,7 @@ def _add_cfr_refs(agency_map, slug, cfr_references):
         agency_map[key].append(slug)
 
 def fetch_agencies():
+    """Fetch all agencies, upsert into DB, return {(title, chapter): [slugs]} mapping."""
     response = httpx.get(f"{ECFR_BASE_URL}/api/admin/v1/agencies.json")
     response.raise_for_status()
     data = response.json()
@@ -79,6 +80,33 @@ def fetch_title_metadata():
         }
     return titles
 
+def _find_nodes(parent_node, target_type):
+    """Recursively find all descendant nodes matching target_type."""
+    nodes = []
+    for child in parent_node.get("children", []):
+        if child["type"] == target_type:
+            nodes.append(child)
+        else:
+            nodes.extend(_find_nodes(child, target_type))
+    return nodes 
+
+def fetch_titles_structure(title_number, date):
+    """Fetch title structure and build {part_identifier: chapter_identifier} mapping."""
+    response = httpx.get(f"{ECFR_BASE_URL}/api/versioner/v1/structure/{date}/title-{title_number}.json")
+    response.raise_for_status()
+    data = response.json()
+
+    chapters_nodes = _find_nodes(data, "chapter")
+
+    part_map = {}
+
+    for chapter in chapters_nodes:
+        part_nodes = _find_nodes(chapter, "part")
+        for part in part_nodes:
+            part_map[part["identifier"]] = chapter["identifier"]
+
+    return part_map
+
 
 def process_title_content(title_number, date, agency_map):
     """Fetch XML for a title, parse chapters, compute word counts per agency.
@@ -119,3 +147,36 @@ def process_title_content(title_number, date, agency_map):
 
     return dict(results)
 
+def process_title_versions(title_number, date, agency_map):
+    """Fetch version history for a title, map to agencies, categorize changes.
+
+    Returns {agency_slug: {period: {substantive: N, non_substantive: N, removals: N}}}.
+    """
+    part_map = fetch_titles_structure(title_number, date)
+
+    response = httpx.get(f"{ECFR_BASE_URL}/api/versioner/v1/versions/title-{title_number}.json")
+    response.raise_for_status()
+    data = response.json()
+
+    results = defaultdict(lambda: defaultdict(lambda: {"substantive": 0, "non_substantive": 0, "removals": 0}))
+
+    for entry in data["content_versions"]:
+        chapter = part_map.get(entry["part"])
+        if not chapter:
+            continue
+
+        slugs = agency_map.get((title_number, chapter), [])
+        if not slugs:
+            continue
+
+        period = entry["amendment_date"][:7]
+
+        for slug in slugs:
+            if entry["removed"]:
+                results[slug][period]["removals"] += 1
+            elif entry["substantive"]:
+                results[slug][period]["substantive"] += 1
+            else:
+                results[slug][period]["non_substantive"] += 1
+
+    return dict(results)

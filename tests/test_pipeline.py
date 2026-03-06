@@ -1,6 +1,6 @@
 from collections import defaultdict
 from unittest.mock import patch, Mock
-from api.pipeline import _add_cfr_refs, process_title_content
+from api.pipeline import _add_cfr_refs, _find_nodes, process_title_content, process_title_versions
 
 
 class TestAddCfrRefs:
@@ -120,3 +120,195 @@ class TestProcessTitleContent:
         assert results["agency-a"]["word_count"] == 4
         assert results["agency-b"]["word_count"] == 4
         assert results["agency-a"]["text"] == results["agency-b"]["text"]
+
+
+class TestFindNodes:
+    # Finds direct children matching the target type
+    def test_finds_direct_children(self):
+        tree = {
+            "type": "title",
+            "children": [
+                {"type": "chapter", "identifier": "I"},
+                {"type": "chapter", "identifier": "II"},
+            ]
+        }
+        result = _find_nodes(tree, "chapter")
+        assert len(result) == 2
+        assert result[0]["identifier"] == "I"
+        assert result[1]["identifier"] == "II"
+
+    # Finds nodes nested inside intermediate nodes (e.g., parts inside subchapters)
+    def test_finds_nested_through_intermediate(self):
+        tree = {
+            "type": "chapter",
+            "identifier": "I",
+            "children": [
+                {
+                    "type": "subchapter",
+                    "identifier": "A",
+                    "children": [
+                        {"type": "part", "identifier": "1"},
+                        {"type": "part", "identifier": "2"},
+                    ]
+                }
+            ]
+        }
+        result = _find_nodes(tree, "part")
+        assert len(result) == 2
+        assert result[0]["identifier"] == "1"
+
+    # Returns empty list when no nodes match
+    def test_no_matches_returns_empty(self):
+        tree = {
+            "type": "title",
+            "children": [
+                {"type": "chapter", "identifier": "I"},
+            ]
+        }
+        result = _find_nodes(tree, "part")
+        assert result == []
+
+    # Handles nodes with no children key
+    def test_no_children_key(self):
+        tree = {"type": "part", "identifier": "1"}
+        result = _find_nodes(tree, "section")
+        assert result == []
+
+
+def _make_version(part, date, substantive=True, removed=False):
+    """Build a minimal version entry for testing."""
+    return {
+        "part": part,
+        "amendment_date": date,
+        "substantive": substantive,
+        "removed": removed,
+        "identifier": "1.1",
+        "name": "test section",
+        "title": "1",
+        "type": "section",
+    }
+
+
+def _mock_json_get(json_data):
+    """Create a mock httpx.get that returns the given JSON."""
+    mock_response = Mock()
+    mock_response.json.return_value = json_data
+    mock_response.raise_for_status = Mock()
+    return Mock(return_value=mock_response)
+
+
+class TestProcessTitleVersions:
+    # Helper: structure JSON with one chapter containing two parts
+    STRUCTURE = {
+        "type": "title",
+        "identifier": "1",
+        "children": [
+            {
+                "type": "chapter",
+                "identifier": "I",
+                "children": [
+                    {"type": "part", "identifier": "1"},
+                    {"type": "part", "identifier": "2"},
+                ]
+            }
+        ]
+    }
+
+    def _run(self, versions, agency_map, structure=None):
+        """Run process_title_versions with mocked HTTP calls."""
+        struct = structure or self.STRUCTURE
+        versions_json = {"content_versions": versions}
+
+        # process_title_versions makes two httpx.get calls:
+        # 1. fetch_titles_structure (structure endpoint)
+        # 2. versions endpoint
+        mock = Mock()
+        struct_response = Mock()
+        struct_response.json.return_value = struct
+        struct_response.raise_for_status = Mock()
+
+        versions_response = Mock()
+        versions_response.json.return_value = versions_json
+        versions_response.raise_for_status = Mock()
+
+        mock.side_effect = [struct_response, versions_response]
+
+        with patch("api.pipeline.httpx.get", mock):
+            return process_title_versions(1, "2026-01-01", agency_map)
+
+    # Substantive change increments the substantive counter
+    def test_substantive_change(self):
+        versions = [_make_version("1", "2024-03-15", substantive=True, removed=False)]
+        agency_map = {(1, "I"): ["epa"]}
+
+        result = self._run(versions, agency_map)
+        assert result["epa"]["2024-03"]["substantive"] == 1
+        assert result["epa"]["2024-03"]["removals"] == 0
+        assert result["epa"]["2024-03"]["non_substantive"] == 0
+
+    # Non-substantive change increments non_substantive counter
+    def test_non_substantive_change(self):
+        versions = [_make_version("1", "2024-06-01", substantive=False, removed=False)]
+        agency_map = {(1, "I"): ["epa"]}
+
+        result = self._run(versions, agency_map)
+        assert result["epa"]["2024-06"]["non_substantive"] == 1
+        assert result["epa"]["2024-06"]["substantive"] == 0
+
+    # Removal increments removals counter
+    def test_removal(self):
+        versions = [_make_version("2", "2024-01-10", substantive=False, removed=True)]
+        agency_map = {(1, "I"): ["epa"]}
+
+        result = self._run(versions, agency_map)
+        assert result["epa"]["2024-01"]["removals"] == 1
+
+    # Entry that is both removed and substantive counts as removal, not substantive
+    def test_removed_takes_priority_over_substantive(self):
+        versions = [_make_version("1", "2024-03-15", substantive=True, removed=True)]
+        agency_map = {(1, "I"): ["epa"]}
+
+        result = self._run(versions, agency_map)
+        assert result["epa"]["2024-03"]["removals"] == 1
+        assert result["epa"]["2024-03"]["substantive"] == 0
+
+    # Multiple entries in the same month aggregate correctly
+    def test_aggregation_same_period(self):
+        versions = [
+            _make_version("1", "2024-03-01", substantive=True, removed=False),
+            _make_version("1", "2024-03-15", substantive=True, removed=False),
+            _make_version("2", "2024-03-20", substantive=False, removed=True),
+        ]
+        agency_map = {(1, "I"): ["epa"]}
+
+        result = self._run(versions, agency_map)
+        assert result["epa"]["2024-03"]["substantive"] == 2
+        assert result["epa"]["2024-03"]["removals"] == 1
+
+    # Entries in different months produce separate period keys
+    def test_different_periods_separate(self):
+        versions = [
+            _make_version("1", "2024-01-15", substantive=True, removed=False),
+            _make_version("1", "2024-06-15", substantive=True, removed=False),
+        ]
+        agency_map = {(1, "I"): ["epa"]}
+
+        result = self._run(versions, agency_map)
+        assert "2024-01" in result["epa"]
+        assert "2024-06" in result["epa"]
+
+    # Versions for a part not in the structure are skipped
+    def test_unmapped_part_skipped(self):
+        versions = [_make_version("999", "2024-03-15", substantive=True, removed=False)]
+        agency_map = {(1, "I"): ["epa"]}
+
+        result = self._run(versions, agency_map)
+        assert result == {}
+
+    # Chapter with no agency mapping produces no results
+    def test_unmapped_chapter_skipped(self):
+        versions = [_make_version("1", "2024-03-15", substantive=True, removed=False)]
+        agency_map = {}  # no agencies mapped
+
+        result = self._run(versions, agency_map)
+        assert result == {}

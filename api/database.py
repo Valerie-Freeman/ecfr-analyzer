@@ -52,8 +52,8 @@ def create_tables():
                     id SERIAL PRIMARY KEY,
                     agency_slug TEXT NOT NULL REFERENCES agencies(slug),
                     period TEXT NOT NULL,
-                    additions INTEGER DEFAULT 0,
-                    amendments INTEGER DEFAULT 0,
+                    substantive INTEGER DEFAULT 0,
+                    non_substantive INTEGER DEFAULT 0,
                     removals INTEGER DEFAULT 0
                 );
 
