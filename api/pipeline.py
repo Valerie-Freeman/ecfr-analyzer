@@ -1,4 +1,5 @@
 import hashlib
+import io
 import logging
 import xml.etree.ElementTree as ET
 
@@ -115,8 +116,8 @@ def process_title_content(title_number, date, agency_map):
     """Fetch XML for a title, parse chapters, compute word counts per agency.
 
     Returns {agency_slug: {"word_count": int, "text": str}} with partial
-    results for this title. The caller aggregates across titles, computes
-    checksums from the combined text, and writes to the database.
+    results for this title. Uses iterparse for memory-efficient streaming
+    so large titles (e.g., Title 7 Agriculture) don't exceed Render's 512MB.
     """
     response = httpx.get(
         f"{ECFR_BASE_URL}/api/versioner/v1/full/{date}/title-{title_number}.xml",
@@ -124,29 +125,31 @@ def process_title_content(title_number, date, agency_map):
     )
     response.raise_for_status()
 
-    # parses the xml to an element tree
-    root = ET.fromstring(response.text)
     results = defaultdict(lambda: {"word_count": 0, "text": ""})
 
-    # find all DIV3 elements in the tree
-    for div3 in root.iter("DIV3"):
-        # ensure the DIV3 is a chapter
-        if div3.get("TYPE") != "CHAPTER":
+    # iterparse streams through the XML instead of loading the full tree.
+    # "end" events fire when an element's closing tag is reached, so the
+    # full subtree is available for itertext(). After processing, clear()
+    # frees that subtree's memory.
+    for event, elem in ET.iterparse(io.BytesIO(response.content), events=("end",)):
+        if elem.tag != "DIV3":
             continue
-        chapter = div3.get("N")
+        if elem.get("TYPE") != "CHAPTER":
+            elem.clear()
+            continue
+        chapter = elem.get("N")
         if not chapter:
+            elem.clear()
             continue
-        
-        # collect all text from the chapter and everything nested inside into one string
-        text = " ".join(div3.itertext())
-        # the key for the agency_map - which agencies own this chapter
+
+        text = " ".join(elem.itertext())
         key = (title_number, chapter)
 
-        # find the agencies that own the chapter using the agency_map dict
-        # increment the word count and concatenate the chapter text for each returned agency
         for slug in agency_map.get(key, []):
             results[slug]["word_count"] += len(text.split())
             results[slug]["text"] += text
+
+        elem.clear()
 
     return dict(results)
 
@@ -208,18 +211,19 @@ def run_pipeline(full_refresh=False):
         if not has_changes:
             return
 
-    agency_text_data = defaultdict(lambda: {"word_count": 0, "text": ""})
+    agency_word_counts = defaultdict(int)
+    agency_hashers = defaultdict(hashlib.sha256)
     agency_history = defaultdict(lambda: defaultdict(lambda: {"substantive": 0, "non_substantive": 0, "removals": 0}))
 
     for i, (title_number, title_dates) in enumerate(title_metadata.items(), 1):
         logger.info("Processing title %d (%d/%d)", title_number, i, len(title_metadata))
 
-        # title content for word count and text concatenation for checksum per agency
+        # title content for word count; text is hashed incrementally then discarded
         title_content = process_title_content(title_number, title_dates["up_to_date_as_of"], agency_map)
 
         for slug, text_data in title_content.items():
-            agency_text_data[slug]["word_count"] += text_data["word_count"]
-            agency_text_data[slug]["text"] += text_data["text"]
+            agency_word_counts[slug] += text_data["word_count"]
+            agency_hashers[slug].update(text_data["text"].encode())
 
         # title versions for change history per agency
         title_versions = process_title_versions(title_number, title_dates["up_to_date_as_of"], agency_map)
@@ -229,10 +233,6 @@ def run_pipeline(full_refresh=False):
                 agency_history[slug][period]["substantive"] += change_counts["substantive"]
                 agency_history[slug][period]["non_substantive"] += change_counts["non_substantive"]
                 agency_history[slug][period]["removals"] += change_counts["removals"]
-            
-    for slug, text_data in agency_text_data.items():
-        # create the checksum of the full, concatenated text for each agency
-        text_data["checksum"] = hashlib.sha256(text_data["text"].encode()).hexdigest()
 
     # write all computed metrics to the database in a single transaction
     with get_conn() as conn:
@@ -242,14 +242,14 @@ def run_pipeline(full_refresh=False):
             cur.execute("DELETE FROM checksums")
             cur.execute("DELETE FROM change_history")
 
-            for slug, text_data in agency_text_data.items():
+            for slug, word_count in agency_word_counts.items():
                 cur.execute(
                     "INSERT INTO word_counts (agency_slug, word_count) VALUES (%s, %s)",
-                    (slug, text_data["word_count"]),
+                    (slug, word_count),
                 )
                 cur.execute(
                     "INSERT INTO checksums (agency_slug, checksum) VALUES (%s, %s)",
-                    (slug, text_data["checksum"]),
+                    (slug, agency_hashers[slug].hexdigest()),
                 )
 
             for slug, periods in agency_history.items():
@@ -273,4 +273,4 @@ def run_pipeline(full_refresh=False):
                 )
 
         conn.commit()
-    logger.info("Pipeline complete: %d agencies with metrics", len(agency_text_data))
+    logger.info("Pipeline complete: %d agencies with metrics", len(agency_word_counts))
