@@ -25,10 +25,10 @@ def _run_pipeline_safe():
 async def lifespan(app):
     create_tables()
 
-    # if the database is empty, populate it in a background thread
+    # if the pipeline has never completed, run it in a background thread
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM agencies")
+            cur.execute("SELECT COUNT(*) FROM pipeline_metadata")
             count = cur.fetchone()[0]
 
     if count == 0:
