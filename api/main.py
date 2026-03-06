@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from api.database import create_tables, get_conn
 from api.pipeline import run_pipeline
+from api.routes.agencies import router
 
 @asynccontextmanager
 async def lifespan(app):
@@ -27,3 +28,5 @@ app = FastAPI(title="eCFR Analyzer", lifespan=lifespan)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+app.include_router(router)
