@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from api.database import create_tables, get_conn
 from api.pipeline import run_pipeline
 from api.routes.agencies import router
+from api.scheduler import start_scheduler, stop_scheduler
 
 @asynccontextmanager
 async def lifespan(app):
@@ -21,7 +22,13 @@ async def lifespan(app):
         thread.daemon = True
         thread.start()
 
+    # start the scheduler that runs run_pipeline(full_refresh=False) everyday at 2am
+    start_scheduler()
+
     yield
+
+    # stop the scheduler when the server stops
+    stop_scheduler()
 
 app = FastAPI(title="eCFR Analyzer", lifespan=lifespan)
 
