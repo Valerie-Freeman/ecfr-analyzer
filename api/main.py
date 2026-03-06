@@ -7,6 +7,10 @@ from api.pipeline import run_pipeline
 from api.routes.agencies import router
 from api.scheduler import start_scheduler, stop_scheduler
 
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+
 @asynccontextmanager
 async def lifespan(app):
     create_tables()
@@ -32,8 +36,16 @@ async def lifespan(app):
 
 app = FastAPI(title="eCFR Analyzer", lifespan=lifespan)
 
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 app.include_router(router)
+
+app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="static")
+
+@app.get("/{path:path}")
+def serve_frontend(path: str):
+    return HTMLResponse((STATIC_DIR / "index.html").read_text())
