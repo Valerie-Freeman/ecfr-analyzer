@@ -1,3 +1,4 @@
+import logging
 import threading
 
 from fastapi import FastAPI
@@ -11,6 +12,15 @@ from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def _run_pipeline_safe():
+    try:
+        run_pipeline(full_refresh=True)
+    except Exception:
+        logger.exception("Pipeline failed")
+
 @asynccontextmanager
 async def lifespan(app):
     create_tables()
@@ -22,7 +32,7 @@ async def lifespan(app):
             count = cur.fetchone()[0]
 
     if count == 0:
-        thread = threading.Thread(target=run_pipeline, kwargs={"full_refresh": True})
+        thread = threading.Thread(target=_run_pipeline_safe)
         thread.daemon = True
         thread.start()
 

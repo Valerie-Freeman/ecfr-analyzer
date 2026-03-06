@@ -1,9 +1,12 @@
 import hashlib
+import logging
 import xml.etree.ElementTree as ET
 
 import httpx
 from collections import defaultdict
 from api.database import get_conn
+
+logger = logging.getLogger(__name__)
 
 ECFR_BASE_URL = "https://www.ecfr.gov"
 
@@ -182,8 +185,11 @@ def process_title_versions(title_number, date, agency_map):
     return dict(results)
 
 def run_pipeline(full_refresh=False):
+    logger.info("Pipeline started (full_refresh=%s)", full_refresh)
     agency_map = fetch_agencies()
+    logger.info("Fetched %d agency-chapter mappings", len(agency_map))
     title_metadata = fetch_title_metadata()
+    logger.info("Found %d active titles to process", len(title_metadata))
 
     # check what we've already processed to skip unchanged titles
     stored_metadata = {}
@@ -205,7 +211,8 @@ def run_pipeline(full_refresh=False):
     agency_text_data = defaultdict(lambda: {"word_count": 0, "text": ""})
     agency_history = defaultdict(lambda: defaultdict(lambda: {"substantive": 0, "non_substantive": 0, "removals": 0}))
 
-    for title_number, title_dates in title_metadata.items():
+    for i, (title_number, title_dates) in enumerate(title_metadata.items(), 1):
+        logger.info("Processing title %d (%d/%d)", title_number, i, len(title_metadata))
 
         # title content for word count and text concatenation for checksum per agency
         title_content = process_title_content(title_number, title_dates["up_to_date_as_of"], agency_map)
@@ -266,3 +273,4 @@ def run_pipeline(full_refresh=False):
                 )
 
         conn.commit()
+    logger.info("Pipeline complete: %d agencies with metrics", len(agency_text_data))
