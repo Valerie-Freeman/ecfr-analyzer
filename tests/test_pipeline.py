@@ -58,6 +58,7 @@ def _mock_get(xml_text):
     """Create a mock httpx.get that returns the given XML."""
     mock_response = Mock()
     mock_response.text = xml_text
+    mock_response.content = xml_text.encode("utf-8")
     mock_response.raise_for_status = Mock()
     return Mock(return_value=mock_response)
 
