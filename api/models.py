@@ -20,7 +20,6 @@ class AgencySummary(BaseModel):
 
 class AgencyDetail(AgencySummary):
     change_history: list[ChangeEntry] = []
-    net_growth_ratio: float | None = None
 
 
 class PipelineStatus(BaseModel):

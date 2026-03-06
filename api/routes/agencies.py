@@ -55,13 +55,6 @@ def get_agency(slug: str):
             """, (slug,))
             rows = cur.fetchall()
     
-    # calculate net growth
-    total_substantive = sum(r[1] for r in rows)
-    total_removals = sum(r[3] for r in rows)
-    total_changes = sum(r[1] + r[2] + r[3] for r in rows)
-    net_growth = (total_substantive - total_removals) / total_changes if total_changes > 0 else None
-
-
     return AgencyDetail(
         slug=row[0],
         name=row[1],
@@ -78,7 +71,6 @@ def get_agency(slug: str):
             )
             for change_row in rows
         ],
-        net_growth_ratio=net_growth
     )
 
 @router.get("/pipeline/status", response_model=PipelineStatus)
