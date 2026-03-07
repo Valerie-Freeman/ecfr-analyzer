@@ -19,6 +19,15 @@ const WordCountChart = ({ agencies }) => {
       .map((a) => ({ name: a.short_name || a.name, word_count: a.word_count }))
   }, [agencies])
 
+  const ticks = useMemo(() => {
+    if (data.length === 0) return []
+    const max = data[0].word_count
+    const step = Math.ceil(max / 12 / 1_000_000) * 1_000_000 || 500_000
+    const result = []
+    for (let v = 0; v <= max; v += step) result.push(v)
+    return result
+  }, [data])
+
   if (data.length === 0) {
     return <p className="text-sm text-gray-400">No word count data available</p>
   }
@@ -28,7 +37,8 @@ const WordCountChart = ({ agencies }) => {
       <BarChart data={data} layout="vertical" margin={{ left: 20, right: 20 }}>
         <XAxis
           type="number"
-          tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
+          ticks={ticks}
+          tickFormatter={(v) => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
           fontSize={12}
         />
         <YAxis type="category" dataKey="name" width={180} fontSize={11} />

@@ -25,13 +25,14 @@ const ChangesChart = ({ changeHistory }) => {
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={changeHistory} margin={{ left: 0, right: 10 }}>
+      <BarChart data={changeHistory} margin={{ left: 0, right: 10, bottom: 20 }}>
         <XAxis
           dataKey="period"
           fontSize={11}
           angle={-45}
           textAnchor="end"
           height={60}
+          dy={10}
           interval="preserveStartEnd"
         />
         <YAxis fontSize={12} />

@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react"
 
 const COLUMNS = [
-  { key: "name", label: "Agency" },
-  { key: "word_count", label: "Words", numeric: true },
-  { key: "checksum", label: "Checksum" },
-  { key: "computed_at", label: "Updated" },
+  { key: "name", label: "Agency", sortable: true },
+  { key: "word_count", label: "Words", numeric: true, sortable: true },
+  { key: "checksum", label: "Checksum", sortable: false },
+  { key: "computed_at", label: "Updated", sortable: false },
 ]
 
 const AgencyTable = ({ agencies, selectedSlug, onSelect }) => {
@@ -23,8 +23,8 @@ const AgencyTable = ({ agencies, selectedSlug, onSelect }) => {
   const sorted = useMemo(() => {
     const copy = [...agencies]
     copy.sort((a, b) => {
-      let aVal = a[sortField]
-      let bVal = b[sortField]
+      let aVal = sortField === "name" ? (a.short_name || a.name) : a[sortField]
+      let bVal = sortField === "name" ? (b.short_name || b.name) : b[sortField]
       if (aVal == null) return 1
       if (bVal == null) return -1
       if (typeof aVal === "string") aVal = aVal.toLowerCase()
@@ -47,17 +47,19 @@ const AgencyTable = ({ agencies, selectedSlug, onSelect }) => {
   }
 
   return (
-    <div className="overflow-y-auto max-h-[70vh]">
+    <div className="overflow-y-auto min-h-0 flex-1">
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-white">
           <tr>
             {COLUMNS.map((col) => (
               <th
                 key={col.key}
-                onClick={() => handleSort(col.key)}
-                className="text-left px-2 py-2 cursor-pointer hover:text-blue-600 whitespace-nowrap"
+                onClick={col.sortable ? () => handleSort(col.key) : undefined}
+                className={`text-left px-2 py-2 whitespace-nowrap ${
+                  col.sortable ? "cursor-pointer hover:text-blue-600" : ""
+                }`}
               >
-                {col.label}{arrow(col.key)}
+                {col.label}{col.sortable ? arrow(col.key) : ""}
               </th>
             ))}
           </tr>

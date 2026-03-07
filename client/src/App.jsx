@@ -53,7 +53,7 @@ const App = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: agency table */}
-        <div className="lg:col-span-1 bg-white rounded-lg shadow p-4">
+        <div className="lg:col-span-1 bg-white rounded-lg shadow p-4 flex flex-col lg:max-h-[calc(100vh-8rem)] lg:sticky lg:top-6">
           <h2 className="text-lg font-semibold mb-3">Agencies</h2>
           <AgencyTable
             agencies={agencies}
