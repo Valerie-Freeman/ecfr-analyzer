@@ -65,32 +65,24 @@ const App = () => {
         {/* Right column: charts */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-lg font-semibold mb-3">
-              Word Count by Agency
-            </h2>
+            <h2 className="text-lg font-semibold mb-3">Word Count by Agency</h2>
             <WordCountChart agencies={agencies} />
           </div>
 
           <div className="bg-white rounded-lg shadow p-4">
             <h2 className="text-lg font-semibold mb-3">
               Changes Over Time
-              {agencyDetail &&
-                ` - ${agencyDetail.short_name || agencyDetail.name}`}
+              {agencyDetail && ` - ${agencyDetail.name}`}
             </h2>
-            <ChangesChart
-              changeHistory={agencyDetail?.change_history}
-            />
+            <ChangesChart changeHistory={agencyDetail?.change_history} />
           </div>
 
           <div className="bg-white rounded-lg shadow p-4">
             <h2 className="text-lg font-semibold mb-3">
-              DOGE-Era Regulatory Activity
-              {agencyDetail &&
-                ` - ${agencyDetail.short_name || agencyDetail.name}`}
+              Removal Deficit
+              {agencyDetail && ` - ${agencyDetail.name}`}
             </h2>
-            <RegGrowthChart
-              changeHistory={agencyDetail?.change_history}
-            />
+            <RegGrowthChart changeHistory={agencyDetail?.change_history} />
           </div>
         </div>
       </div>

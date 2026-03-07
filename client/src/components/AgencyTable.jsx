@@ -73,7 +73,7 @@ const AgencyTable = ({ agencies, selectedSlug, onSelect }) => {
                 a.slug === selectedSlug ? "bg-blue-100" : ""
               }`}
             >
-              <td className="px-2 py-1.5">{a.short_name || a.name}</td>
+              <td className="px-2 py-1.5" title={a.name}>{a.short_name || a.name}</td>
               <td className="px-2 py-1.5 tabular-nums">
                 {a.word_count?.toLocaleString() ?? "-"}
               </td>

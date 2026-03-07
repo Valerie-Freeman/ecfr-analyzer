@@ -14,7 +14,7 @@ A web dashboard that turns 200,000+ pages of federal regulations into digestible
 
 ![Change history over time](docs/change_history.png)
 
-![DOGE-era net regulatory growth](docs/net_growth.png)
+![Removal Deficit metric](docs/removal_deficit.png)
 
 ## Architecture
 
@@ -36,7 +36,7 @@ client/src/
     ├── AgencyTable.jsx     # Sortable agency list
     ├── WordCountChart.jsx  # Top agencies bar chart
     ├── ChangesChart.jsx    # Change history over time
-    └── RegGrowthChart.jsx  # DOGE-era custom metric
+    └── RegGrowthChart.jsx  # Removal Deficit metric
 ```
 
 ![Database ERD](docs/ERD.png)
@@ -98,7 +98,7 @@ sequenceDiagram
     F->>DB: Query agency + change history
     DB-->>F: Rows
     F-->>R: JSON (monthly change history)
-    Note over R: Compute DOGE-era metric<br/>client-side from change data
+    Note over R: Compute Removal Deficit<br/>client-side from change data
     R-->>U: Render changes chart + custom metric
 ```
 
@@ -116,7 +116,7 @@ sequenceDiagram
 
 Changes are aggregated by agency and monthly period. Mapping versions to agencies requires an extra step: versions reference parts (not chapters), so the structure endpoint builds a part-to-chapter lookup table.
 
-**Custom metric, DOGE-era net regulatory growth:** Computed client-side by filtering change history to January 2025 onward and applying `(substantive - removals) / total`. Positive = net regulatory growth, negative = net reduction. Keeping this client-side makes the API generic and the time window adjustable without backend changes.
+**Custom metric, Removal Deficit:** Computed client-side from the trailing 12-month change history using `1 - (removals / (substantive + removals))`. Measures what fraction of an agency's substantive regulatory activity is not deregulatory: 0% = all removals (fully deregulatory), 100% = no removals. Aligned with the EO 13771 deregulatory ratio framework. The denominator uses `substantive + removals` because our pipeline categorizes these into disjoint buckets. Keeping this client-side makes the API generic and the time window adjustable without backend changes.
 
 ## Tech Decisions
 
