@@ -39,7 +39,7 @@ client/src/
     └── RegGrowthChart.jsx  # DOGE-era custom metric
 ```
 
-![Database ERD](docs/erd.png)
+![Database ERD](docs/ERD.png)
 
 ### Data Pipeline
 
