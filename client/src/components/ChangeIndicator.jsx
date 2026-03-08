@@ -7,14 +7,14 @@ const formatDate = (dateStr) => {
 const ChangeIndicator = ({ agencyDetail }) => {
   if (!agencyDetail || agencyDetail.checksum_changed === null) {
     return (
-      <div className="bg-white rounded-lg shadow p-4 text-sm text-gray-400">
+      <div className="bg-white rounded-xl shadow p-4 text-sm text-gray-400">
         Select an agency to view change status
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-4 flex items-center gap-4 text-base">
+    <div className="bg-white rounded-xl shadow p-4 flex items-center gap-4 text-base">
       <span className="font-normal">{agencyDetail.name}</span>
       <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${
         agencyDetail.checksum_changed

@@ -44,26 +44,38 @@ const App = () => {
   if (error) return <p className="p-8 text-red-600">Error: {error}</p>
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">eCFR Analyzer</h1>
-        <p className="text-sm text-gray-500">
+    <div className="min-h-screen p-6" style={{ backgroundColor: "#f2f2f2" }}>
+      <header className="mb-4 flex items-center justify-between">
+        <h1 className="text-xl font-medium text-gray-900 bg-white rounded-xl p-3 shadow">
+          eCFR Analyzer
+        </h1>
+        <p className="text-sm text-gray-500 mr-3">
           {agencies.length} agencies loaded
-          {agencies[0]?.computed_at && (() => {
-            const utc = new Date(agencies[0].computed_at + "Z")
-            return (
-              <span className="ml-2">
-                · Last updated {utc.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}{" "}
-                at {utc.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
-              </span>
-            )
-          })()}
+          {agencies[0]?.computed_at &&
+            (() => {
+              const utc = new Date(agencies[0].computed_at + "Z")
+              return (
+                <span className="ml-2">
+                  · Last updated{" "}
+                  {utc.toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}{" "}
+                  at{" "}
+                  {utc.toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </span>
+              )
+            })()}
         </p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: agency table */}
-        <div className="lg:col-span-1 bg-white rounded-lg shadow p-4 flex flex-col lg:max-h-[calc(100vh-8rem)] lg:sticky lg:top-6">
+        <div className="lg:col-span-1 bg-white rounded-xl shadow p-4 flex flex-col lg:max-h-[calc(100vh-6rem)] lg:sticky lg:top-6">
           <h2 className="text-lg font-normal mb-3">Agencies</h2>
           <AgencyTable
             agencies={agencies}
@@ -74,8 +86,10 @@ const App = () => {
 
         {/* Right column: charts */}
         <div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="lg:col-span-2 bg-white rounded-lg shadow p-4">
-            <h2 className="text-lg font-normal mb-3">Top 10 Agencies by Word Count</h2>
+          <div className="lg:col-span-2 bg-white rounded-xl shadow p-4">
+            <h2 className="text-lg font-normal mb-3">
+              Top 10 Agencies by Word Count
+            </h2>
             <WordCountChart agencies={agencies} />
           </div>
 
@@ -83,7 +97,7 @@ const App = () => {
             <ChangeIndicator agencyDetail={agencyDetail} />
           </div>
 
-          <div className="bg-white rounded-lg shadow p-4 min-h-[420px]">
+          <div className="bg-white rounded-xl shadow p-4 min-h-[420px]">
             <h2 className="text-lg font-normal mb-3">
               Changes Over Time (Last 5 Years)
               {agencyDetail && ` - ${agencyDetail.name}`}
@@ -91,7 +105,7 @@ const App = () => {
             <ChangesChart changeHistory={agencyDetail?.change_history} />
           </div>
 
-          <div className="bg-white rounded-lg shadow p-4 min-h-[420px]">
+          <div className="bg-white rounded-xl shadow p-4 min-h-[420px]">
             <h2 className="text-lg font-normal mb-3">
               Removal Deficit (Last 12 Months)
               {agencyDetail && ` - ${agencyDetail.name}`}
