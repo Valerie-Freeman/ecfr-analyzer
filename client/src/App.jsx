@@ -3,6 +3,7 @@ import AgencyTable from "./components/AgencyTable"
 import WordCountChart from "./components/WordCountChart"
 import ChangesChart from "./components/ChangesChart"
 import RegGrowthChart from "./components/RegGrowthChart"
+import ChangeIndicator from "./components/ChangeIndicator"
 
 const App = () => {
   const [agencies, setAgencies] = useState([])
@@ -68,6 +69,8 @@ const App = () => {
             <h2 className="text-lg font-semibold mb-3">Word Count by Agency</h2>
             <WordCountChart agencies={agencies} />
           </div>
+
+          <ChangeIndicator agencyDetail={agencyDetail} />
 
           <div className="bg-white rounded-lg shadow p-4">
             <h2 className="text-lg font-semibold mb-3">

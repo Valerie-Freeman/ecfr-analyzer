@@ -14,7 +14,9 @@ def list_agencies():
                        w.word_count, c.checksum, c.computed_at
                 FROM agencies a
                 LEFT JOIN word_counts w ON a.slug = w.agency_slug
+                    AND w.computed_at = (SELECT MAX(computed_at) FROM word_counts)
                 LEFT JOIN checksums c ON a.slug = c.agency_slug
+                    AND c.computed_at = (SELECT MAX(computed_at) FROM checksums)
                 ORDER BY a.name
             """)
             rows = cur.fetchall()
@@ -40,12 +42,30 @@ def get_agency(slug: str):
                        w.word_count, c.checksum, c.computed_at
                 FROM agencies a
                 LEFT JOIN word_counts w ON a.slug = w.agency_slug
+                    AND w.computed_at = (SELECT MAX(computed_at) FROM word_counts)
                 LEFT JOIN checksums c ON a.slug = c.agency_slug
+                    AND c.computed_at = (SELECT MAX(computed_at) FROM checksums)
                 WHERE a.slug = %s
             """, (slug,))
             row = cur.fetchone()
             if not row:
                  raise HTTPException(status_code=404, detail="Agency not found")
+
+            # two most recent checksums for change detection
+            cur.execute("""
+                SELECT checksum, data_date FROM checksums
+                WHERE agency_slug = %s
+                ORDER BY computed_at DESC LIMIT 2
+            """, (slug,))
+            recent_checksums = cur.fetchall()
+
+            # two most recent word counts for delta
+            cur.execute("""
+                SELECT word_count, data_date FROM word_counts
+                WHERE agency_slug = %s
+                ORDER BY computed_at DESC LIMIT 2
+            """, (slug,))
+            recent_word_counts = cur.fetchall()
 
             cur.execute("""
                 SELECT period, substantive, non_substantive, removals
@@ -53,8 +73,21 @@ def get_agency(slug: str):
                 WHERE agency_slug = %s
                 ORDER BY period
             """, (slug,))
-            rows = cur.fetchall()
-    
+            history_rows = cur.fetchall()
+
+    # compare current vs previous in Python
+    checksum_changed = None
+    current_data_date = None
+    previous_data_date = None
+    if len(recent_checksums) >= 2:
+        checksum_changed = recent_checksums[0][0] != recent_checksums[1][0]
+        current_data_date = recent_checksums[0][1]
+        previous_data_date = recent_checksums[1][1]
+
+    word_count_change = None
+    if len(recent_word_counts) >= 2:
+        word_count_change = recent_word_counts[0][0] - recent_word_counts[1][0]
+
     return AgencyDetail(
         slug=row[0],
         name=row[1],
@@ -62,14 +95,18 @@ def get_agency(slug: str):
         word_count=row[3],
         checksum=row[4],
         computed_at=row[5],
+        checksum_changed=checksum_changed,
+        word_count_change=word_count_change,
+        current_data_date=current_data_date,
+        previous_data_date=previous_data_date,
         change_history=[
             ChangeEntry(
-                period=change_row[0],
-                substantive=change_row[1],
-                non_substantive=change_row[2],
-                removals=change_row[3],
+                period=r[0],
+                substantive=r[1],
+                non_substantive=r[2],
+                removals=r[3],
             )
-            for change_row in rows
+            for r in history_rows
         ],
     )
 

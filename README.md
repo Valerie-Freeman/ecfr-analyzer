@@ -6,11 +6,19 @@ A web dashboard that turns 200,000+ pages of federal regulations into digestible
 **API docs:** https://ecfr-analyzer-kc2m.onrender.com/docs
 
 
+---
+
+> **Note for reviewers:** Development continued on `main` after the March 6 submission deadline. This README and the deployed version at the link above reflect the latest work. To view the repo and README as it was at the time of submission, see the [`v1-submission`](https://github.com/eking1005/ValerieF-Take-Home-Assessment/tree/v1-submission) branch.
+
+---
+
 ## Screenshots
 
 ![Agency table with sortable columns](docs/agencies_table.png)
 
 ![Word count by agency](docs/word_count.png)
+
+![Change detection indicator](docs/change_indicator.png)
 
 ![Change history over time](docs/change_history.png)
 
@@ -33,17 +41,18 @@ api/
 client/src/
 ├── App.jsx          # Layout, data fetching, state
 └── components/
-    ├── AgencyTable.jsx     # Sortable agency list
-    ├── WordCountChart.jsx  # Top agencies bar chart
-    ├── ChangesChart.jsx    # Change history over time
-    └── RegGrowthChart.jsx  # Removal Deficit metric
+    ├── AgencyTable.jsx      # Sortable agency list
+    ├── WordCountChart.jsx   # Top agencies bar chart
+    ├── ChangeIndicator.jsx  # Changed/unchanged badge + word delta
+    ├── ChangesChart.jsx     # Change history over time
+    └── RegGrowthChart.jsx   # Removal Deficit metric
 ```
 
 ![Database ERD](docs/ERD.png)
 
 ### Data Pipeline
 
-On first deploy, the pipeline populates the database from scratch. After that, a daily scheduler checks for changes and only reprocesses when titles have been amended.
+On first deploy, the pipeline runs twice: once with a historical seed date to establish a baseline, then again with the current date. This gives change detection two data points to compare immediately. Word counts and checksums are appended on each run (not replaced) to preserve history. After initial setup, a daily scheduler checks for changes and only reprocesses when titles have been amended.
 
 ```mermaid
 sequenceDiagram
@@ -72,7 +81,7 @@ sequenceDiagram
         Note over P: Categorize changes by<br/>removed/substantive booleans
     end
 
-    P->>DB: Write word counts, checksums, change history
+    P->>DB: Append word counts + checksums, replace change history
 ```
 
 ### Request Flow
@@ -95,18 +104,18 @@ sequenceDiagram
 
     U->>R: Click agency row
     R->>F: GET /api/agencies/{slug}
-    F->>DB: Query agency + change history
+    F->>DB: Query agency + change history +<br/>two most recent checksums/word counts
     DB-->>F: Rows
-    F-->>R: JSON (monthly change history)
+    F-->>R: JSON (change history, checksum_changed,<br/>word_count_change, data dates)
     Note over R: Compute Removal Deficit<br/>client-side from change data
-    R-->>U: Render changes chart + custom metric
+    R-->>U: Render change indicator,<br/>changes chart + custom metric
 ```
 
 ## How Metrics Are Computed
 
 **Word count:** Full XML for each CFR title is parsed by chapter. Chapters map to agencies via `cfr_references` from the eCFR agencies endpoint. Word count is `len(text.split())` on the extracted text. Agencies spanning multiple titles have their counts summed across all titles.
 
-**Checksum:** SHA-256 hash of all chapter text belonging to the agency. Computed on each pipeline run. If an agency's regulations change between runs, the hash changes, providing a quick "did anything change?" signal without re-reading content.
+**Checksum:** SHA-256 hash of all chapter text belonging to the agency. Computed and stored on each pipeline run. The detail endpoint compares the two most recent checksums to determine if an agency's regulations changed between runs, displayed as a "Changed"/"Unchanged" badge in the UI.
 
 **Historical changes:** The eCFR versions endpoint provides section-level change records with `removed` and `substantive` boolean fields. Each entry is categorized directly:
 

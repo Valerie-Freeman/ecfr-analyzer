@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import date, datetime
 
 
 class ChangeEntry(BaseModel):
@@ -19,6 +19,10 @@ class AgencySummary(BaseModel):
 
 
 class AgencyDetail(AgencySummary):
+    checksum_changed: bool | None = None
+    word_count_change: int | None = None
+    current_data_date: date | None = None
+    previous_data_date: date | None = None
     change_history: list[ChangeEntry] = []
 
 

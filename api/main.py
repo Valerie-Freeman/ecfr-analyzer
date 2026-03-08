@@ -15,8 +15,13 @@ from fastapi.responses import HTMLResponse
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+SEED_DATE = "2026-03-04"
+
 def _run_pipeline_safe():
     try:
+        # seed baseline data from an earlier date so change detection has
+        # two data points to compare on the very first startup
+        run_pipeline(full_refresh=True, seed_date=SEED_DATE)
         run_pipeline(full_refresh=True)
     except Exception:
         logger.exception("Pipeline failed")
