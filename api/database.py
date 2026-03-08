@@ -41,6 +41,7 @@ def create_tables():
                     id SERIAL PRIMARY KEY,
                     agency_slug TEXT NOT NULL REFERENCES agencies(slug),
                     word_count INTEGER NOT NULL,
+                    data_date DATE,
                     computed_at TIMESTAMP DEFAULT NOW()
                 );
 
@@ -48,6 +49,7 @@ def create_tables():
                     id SERIAL PRIMARY KEY,
                     agency_slug TEXT NOT NULL REFERENCES agencies(slug),
                     checksum TEXT NOT NULL,
+                    data_date DATE,
                     computed_at TIMESTAMP DEFAULT NOW()
                 );
 

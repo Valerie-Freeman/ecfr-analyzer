@@ -406,7 +406,7 @@ class TestRunPipelineAggregation:
             if c[0][0].strip().startswith("INSERT INTO word_counts")
         ]
         assert len(word_count_inserts) == 1
-        assert word_count_inserts[0][0][1] == ("epa", 300)
+        assert word_count_inserts[0][0][1] == ("epa", 300, "2026-01-01")
 
     def test_checksums_computed_from_combined_text(self):
         """Checksum reflects text from all titles, not just one."""
@@ -427,7 +427,7 @@ class TestRunPipelineAggregation:
             if c[0][0].strip().startswith("INSERT INTO checksums")
         ]
         assert len(checksum_inserts) == 1
-        assert checksum_inserts[0][0][1] == ("epa", expected_checksum)
+        assert checksum_inserts[0][0][1] == ("epa", expected_checksum, "2026-01-01")
 
     def test_change_history_merged_across_titles(self):
         """Same agency + period from different titles sums counts."""
@@ -450,8 +450,9 @@ class TestRunPipelineAggregation:
         # (slug, period, substantive, non_substantive, removals)
         assert history_inserts[0][0][1] == ("epa", "2024-03", 5, 1, 1)
 
-    def test_old_data_deleted_before_insert(self):
-        """DELETE runs for all three metric tables before any INSERTs."""
+    def test_change_history_deleted_before_insert(self):
+        """DELETE runs for change_history (full replace) before any INSERTs.
+        word_counts and checksums are appended to preserve history."""
         title_metadata = {
             1: {"up_to_date_as_of": "2026-01-01", "latest_amended_on": "2026-01-01"},
         }

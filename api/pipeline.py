@@ -191,7 +191,17 @@ def process_title_versions(title_number, date, agency_map):
 
     return dict(results)
 
-def run_pipeline(full_refresh=False):
+def run_pipeline(full_refresh=False, seed_date=None):
+    """Fetch all CFR titles, compute per-agency word counts, checksums, and change history.
+
+    Skips processing when no titles have been amended since the last run,
+    unless full_refresh=True. Results are appended (not replaced) for
+    word_counts and checksums to preserve history for change detection.
+
+    seed_date: optional date string (e.g. "2026-01-01") to fetch historical
+    data instead of the latest. Used on first startup to seed baseline data
+    for change detection comparison.
+    """
     logger.info("Pipeline started (full_refresh=%s)", full_refresh)
     agency_map = fetch_agencies()
     logger.info("Fetched %d agency-chapter mappings", len(agency_map))
@@ -206,7 +216,7 @@ def run_pipeline(full_refresh=False):
             for row in cur.fetchall():
                 stored_metadata[row[0]] = row[1]
 
-    # skip processing if nothing has changed since last run
+    # compare the fetched title_metadata to the stored meta_data in the database. If ANY titles have a different latest_amended on, continue, otherwise nothing's changed so skip pipeline
     if not full_refresh:
         has_changes = any(
             stored_metadata.get(t) != dates["latest_amended_on"]
@@ -219,11 +229,13 @@ def run_pipeline(full_refresh=False):
     agency_hashers = defaultdict(hashlib.sha256)
     agency_history = defaultdict(lambda: defaultdict(lambda: {"substantive": 0, "non_substantive": 0, "removals": 0}))
 
+    # process data for each title and build per-agency dicts, track process for logging with i = current title being processed
     for i, (title_number, title_dates) in enumerate(title_metadata.items(), 1):
         logger.info("Processing title %d (%d/%d)", title_number, i, len(title_metadata))
 
         # title content for word count; hashers are updated inside the function
-        title_content = process_title_content(title_number, title_dates["up_to_date_as_of"], agency_map, agency_hashers)
+        content_date = seed_date or title_dates["up_to_date_as_of"]
+        title_content = process_title_content(title_number, content_date, agency_map, agency_hashers)
 
         for slug, word_count in title_content.items():
             agency_word_counts[slug] += word_count
@@ -237,22 +249,26 @@ def run_pipeline(full_refresh=False):
                 agency_history[slug][period]["non_substantive"] += change_counts["non_substantive"]
                 agency_history[slug][period]["removals"] += change_counts["removals"]
 
+    # data_date records what eCFR date this data represents, not when the
+    # pipeline ran (that's computed_at). When seed_date is provided, all titles
+    # use that date. Otherwise, titles may have different up_to_date_as_of
+    # dates; we use the max since word counts are aggregated across titles.
+    data_date = seed_date or max(d["up_to_date_as_of"] for d in title_metadata.values())
+
     # write all computed metrics to the database in a single transaction
     with get_conn() as conn:
         with conn.cursor() as cur:
-            # clear old data so we don't accumulate duplicate rows
-            cur.execute("DELETE FROM word_counts")
-            cur.execute("DELETE FROM checksums")
+            # change_history is a full replace (aggregated totals, not point-in-time snapshots)
             cur.execute("DELETE FROM change_history")
 
             for slug, word_count in agency_word_counts.items():
                 cur.execute(
-                    "INSERT INTO word_counts (agency_slug, word_count) VALUES (%s, %s)",
-                    (slug, word_count),
+                    "INSERT INTO word_counts (agency_slug, word_count, data_date) VALUES (%s, %s, %s)",
+                    (slug, word_count, data_date),
                 )
                 cur.execute(
-                    "INSERT INTO checksums (agency_slug, checksum) VALUES (%s, %s)",
-                    (slug, agency_hashers[slug].hexdigest()),
+                    "INSERT INTO checksums (agency_slug, checksum, data_date) VALUES (%s, %s, %s)",
+                    (slug, agency_hashers[slug].hexdigest(), data_date),
                 )
 
             for slug, periods in agency_history.items():
