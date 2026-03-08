@@ -64,7 +64,7 @@ const App = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: agency table */}
         <div className="lg:col-span-1 bg-white rounded-lg shadow p-4 flex flex-col lg:max-h-[calc(100vh-8rem)] lg:sticky lg:top-6">
-          <h2 className="text-lg font-semibold mb-3">Agencies</h2>
+          <h2 className="text-lg font-normal mb-3">Agencies</h2>
           <AgencyTable
             agencies={agencies}
             selectedSlug={selectedSlug}
@@ -75,7 +75,7 @@ const App = () => {
         {/* Right column: charts */}
         <div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="lg:col-span-2 bg-white rounded-lg shadow p-4">
-            <h2 className="text-lg font-semibold mb-3">Top 10 Agencies by Word Count</h2>
+            <h2 className="text-lg font-normal mb-3">Top 10 Agencies by Word Count</h2>
             <WordCountChart agencies={agencies} />
           </div>
 
@@ -83,16 +83,16 @@ const App = () => {
             <ChangeIndicator agencyDetail={agencyDetail} />
           </div>
 
-          <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-lg font-semibold mb-3">
+          <div className="bg-white rounded-lg shadow p-4 min-h-[420px]">
+            <h2 className="text-lg font-normal mb-3">
               Changes Over Time (Last 5 Years)
               {agencyDetail && ` - ${agencyDetail.name}`}
             </h2>
             <ChangesChart changeHistory={agencyDetail?.change_history} />
           </div>
 
-          <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-lg font-semibold mb-3">
+          <div className="bg-white rounded-lg shadow p-4 min-h-[420px]">
+            <h2 className="text-lg font-normal mb-3">
               Removal Deficit (Last 12 Months)
               {agencyDetail && ` - ${agencyDetail.name}`}
             </h2>
