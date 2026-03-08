@@ -1,4 +1,11 @@
 import { useMemo } from "react"
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts"
+
+const COLORS = {
+  substantive: "#3b82f6",
+  non_substantive: "#94a3b8",
+  removals: "#ef4444",
+}
 
 const RegGrowthChart = ({ changeHistory }) => {
   const stats = useMemo(() => {
@@ -65,32 +72,52 @@ const RegGrowthChart = ({ changeHistory }) => {
   }
 
   const pct = (stats.deficit * 100).toFixed(1)
-  // Green = low deficit (more deregulatory), Red = high deficit (few removals)
-  const color = stats.deficit > 0.5 ? "text-red-600" : "text-green-600"
-  const barColor = stats.deficit > 0.5 ? "bg-red-400" : "bg-green-400"
+
+  const pieData = [
+    { name: "Substantive", value: stats.substantive },
+    { name: "Non-substantive", value: stats.nonSubstantive },
+    { name: "Removals", value: stats.removals },
+  ].filter((d) => d.value > 0)
+
+  const colorMap = { Substantive: COLORS.substantive, "Non-substantive": COLORS.non_substantive, Removals: COLORS.removals }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-baseline gap-3">
-        <span className={`text-3xl font-bold ${color}`}>{pct}%</span>
-        <span className="text-sm text-gray-500">Removal Deficit</span>
+    <div className="space-y-4">
+      <div className="relative" style={{ height: 240 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={pieData}
+              cx="50%"
+              cy="50%"
+              innerRadius={55}
+              outerRadius={85}
+              dataKey="value"
+              strokeWidth={2}
+            >
+              {pieData.map((entry) => (
+                <Cell key={entry.name} fill={colorMap[entry.name]} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(v) => v.toLocaleString()} />
+            <Legend wrapperStyle={{ paddingTop: 12 }} />
+          </PieChart>
+        </ResponsiveContainer>
+        {/* Center label */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ marginBottom: 24 }}>
+          <div className="text-center leading-tight">
+            <span className="text-2xl font-bold text-gray-800">{pct}%</span>
+            <p className="text-xs text-gray-400 mt-0.5">deficit</p>
+          </div>
+        </div>
       </div>
 
-      <div className="w-full bg-gray-200 rounded-full h-3">
-        <div
-          className={`h-3 rounded-full ${barColor}`}
-          style={{ width: `${Math.min(stats.deficit * 100, 100)}%` }}
-        />
-      </div>
-
-      <p className="text-sm text-gray-600">
-        Last 12 months: {stats.total.toLocaleString()} changes
-        {" "}({stats.substantive} substantive, {stats.removals} removals)
+      <p className="text-sm text-gray-600 text-center">
+        {stats.total.toLocaleString()} changes: {stats.substantive} substantive, {stats.removals} removals, {stats.nonSubstantive} editorial
       </p>
 
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-gray-400 text-center">
         1 - (removals / (substantive + removals)). 0% = all removals, 100% = no removals.
-        Aligned with EO 13771 deregulatory ratio framework.
       </p>
     </div>
   )

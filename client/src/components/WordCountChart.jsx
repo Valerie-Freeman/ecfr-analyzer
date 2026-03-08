@@ -41,7 +41,7 @@ const WordCountChart = ({ agencies }) => {
           tickFormatter={(v) => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
           fontSize={12}
         />
-        <YAxis type="category" dataKey="name" width={180} fontSize={11} />
+        <YAxis type="category" dataKey="name" width={60} fontSize={11} />
         <Tooltip
           formatter={(v) => v.toLocaleString()}
           labelFormatter={(_, payload) => payload[0]?.payload?.longName || _}
