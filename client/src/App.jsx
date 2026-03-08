@@ -49,6 +49,15 @@ const App = () => {
         <h1 className="text-2xl font-bold text-gray-900">eCFR Analyzer</h1>
         <p className="text-sm text-gray-500">
           {agencies.length} agencies loaded
+          {agencies[0]?.computed_at && (() => {
+            const utc = new Date(agencies[0].computed_at + "Z")
+            return (
+              <span className="ml-2">
+                · Last updated {utc.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}{" "}
+                at {utc.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+              </span>
+            )
+          })()}
         </p>
       </header>
 
@@ -64,17 +73,19 @@ const App = () => {
         </div>
 
         {/* Right column: charts */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-lg font-semibold mb-3">Word Count by Agency</h2>
+        <div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="lg:col-span-2 bg-white rounded-lg shadow p-4">
+            <h2 className="text-lg font-semibold mb-3">Top 10 Agencies by Word Count</h2>
             <WordCountChart agencies={agencies} />
           </div>
 
-          <ChangeIndicator agencyDetail={agencyDetail} />
+          <div className="lg:col-span-2">
+            <ChangeIndicator agencyDetail={agencyDetail} />
+          </div>
 
           <div className="bg-white rounded-lg shadow p-4">
             <h2 className="text-lg font-semibold mb-3">
-              Changes Over Time
+              Changes Over Time (Last 5 Years)
               {agencyDetail && ` - ${agencyDetail.name}`}
             </h2>
             <ChangesChart changeHistory={agencyDetail?.change_history} />
@@ -82,7 +93,7 @@ const App = () => {
 
           <div className="bg-white rounded-lg shadow p-4">
             <h2 className="text-lg font-semibold mb-3">
-              Removal Deficit
+              Removal Deficit (Last 12 Months)
               {agencyDetail && ` - ${agencyDetail.name}`}
             </h2>
             <RegGrowthChart changeHistory={agencyDetail?.change_history} />

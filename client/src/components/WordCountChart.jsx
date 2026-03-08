@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 
-const TOP_N = 15
+const TOP_N = 10
 
 const WordCountChart = ({ agencies }) => {
   const data = useMemo(() => {
@@ -16,7 +16,7 @@ const WordCountChart = ({ agencies }) => {
       .filter((a) => a.word_count)
       .sort((a, b) => b.word_count - a.word_count)
       .slice(0, TOP_N)
-      .map((a) => ({ name: a.short_name || a.name, word_count: a.word_count }))
+      .map((a) => ({ name: a.short_name || a.name, longName: a.name, word_count: a.word_count }))
   }, [agencies])
 
   const ticks = useMemo(() => {
@@ -42,7 +42,10 @@ const WordCountChart = ({ agencies }) => {
           fontSize={12}
         />
         <YAxis type="category" dataKey="name" width={180} fontSize={11} />
-        <Tooltip formatter={(v) => v.toLocaleString()} />
+        <Tooltip
+          formatter={(v) => v.toLocaleString()}
+          labelFormatter={(_, payload) => payload[0]?.payload?.longName || _}
+        />
         <Bar dataKey="word_count" fill="#3b82f6" radius={[0, 4, 4, 0]} />
       </BarChart>
     </ResponsiveContainer>

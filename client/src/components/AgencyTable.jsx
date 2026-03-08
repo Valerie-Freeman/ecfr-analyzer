@@ -4,7 +4,6 @@ const COLUMNS = [
   { key: "name", label: "Agency", sortable: true },
   { key: "word_count", label: "Words", numeric: true, sortable: true },
   { key: "checksum", label: "Checksum", sortable: false },
-  { key: "computed_at", label: "Updated", sortable: false },
 ]
 
 const AgencyTable = ({ agencies, selectedSlug, onSelect }) => {
@@ -35,11 +34,6 @@ const AgencyTable = ({ agencies, selectedSlug, onSelect }) => {
     })
     return copy
   }, [agencies, sortField, sortDir])
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "-"
-    return new Date(dateStr).toLocaleDateString()
-  }
 
   const arrow = (key) => {
     if (sortField !== key) return ""
@@ -77,11 +71,8 @@ const AgencyTable = ({ agencies, selectedSlug, onSelect }) => {
               <td className="px-2 py-1.5 tabular-nums">
                 {a.word_count?.toLocaleString() ?? "-"}
               </td>
-              <td className="px-2 py-1.5 font-mono text-xs">
+              <td className="px-2 py-1.5 font-mono text-xs" title={a.checksum}>
                 {a.checksum?.slice(0, 8) ?? "-"}
-              </td>
-              <td className="px-2 py-1.5 whitespace-nowrap">
-                {formatDate(a.computed_at)}
               </td>
             </tr>
           ))}
