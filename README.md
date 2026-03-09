@@ -12,17 +12,9 @@ A web dashboard that turns 200,000+ pages of federal regulations into digestible
 
 ---
 
-## Screenshots
+## Screenshot of Dashboard
 
-![Agency table with sortable columns](docs/agencies_table.png)
-
-![Word count by agency](docs/word_count.png)
-
-![Change detection indicator](docs/change_indicator.png)
-
-![Change history over time](docs/change_history.png)
-
-![Removal Deficit metric](docs/removal_deficit.png)
+![](/docs/dashboard.png)
 
 ## Architecture
 

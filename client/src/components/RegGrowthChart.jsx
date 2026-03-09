@@ -39,29 +39,35 @@ const RegGrowthChart = ({ changeHistory }) => {
 
   if (!changeHistory || changeHistory.length === 0) {
     return (
-      <p className="text-sm text-gray-400">
-        Select an agency to view removal deficit
-      </p>
+      <div className="flex items-center justify-center h-full pb-16">
+        <p className="text-sm text-gray-400">
+          Select an agency to view removal deficit
+        </p>
+      </div>
     )
   }
 
   if (!stats) {
     return (
-      <p className="text-sm text-gray-400">
-        No regulatory changes recorded in the last 12 months
-      </p>
+      <div className="flex items-center justify-center h-full pb-16">
+        <p className="text-sm text-gray-400">
+          No regulatory changes recorded in the last 12 months
+        </p>
+      </div>
     )
   }
 
   if (stats.deficit === null) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-gray-500">
-          No substantive regulatory changes in the last 12 months
-        </p>
-        <p className="text-sm text-gray-600">
-          {stats.total.toLocaleString()} non-substantive (editorial) changes recorded
-        </p>
+      <div className="flex items-center justify-center h-full pb-16">
+        <div className="space-y-3 text-center">
+          <p className="text-sm text-gray-500">
+            No substantive regulatory changes in the last 12 months
+          </p>
+          <p className="text-sm text-gray-600">
+            {stats.total.toLocaleString()} non-substantive (editorial) changes recorded
+          </p>
+        </div>
       </div>
     )
   }

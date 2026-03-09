@@ -14,9 +14,11 @@ const YEARS = 5
 const ChangesChart = ({ changeHistory }) => {
   if (!changeHistory || changeHistory.length === 0) {
     return (
-      <p className="text-sm text-gray-400">
-        Select an agency to view changes over time
-      </p>
+      <div className="flex items-center justify-center h-full pb-16">
+        <p className="text-sm text-gray-400">
+          Select an agency to view changes over time
+        </p>
+      </div>
     )
   }
 
@@ -25,9 +27,11 @@ const ChangesChart = ({ changeHistory }) => {
 
   if (filtered.length === 0) {
     return (
-      <p className="text-sm text-gray-400">
-        No changes in the last {YEARS} years
-      </p>
+      <div className="flex items-center justify-center h-full pb-16">
+        <p className="text-sm text-gray-400">
+          No changes in the last {YEARS} years
+        </p>
+      </div>
     )
   }
 
