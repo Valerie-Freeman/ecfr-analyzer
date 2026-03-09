@@ -4,6 +4,7 @@ import WordCountChart from "./components/WordCountChart"
 import ChangesChart from "./components/ChangesChart"
 import RegGrowthChart from "./components/RegGrowthChart"
 import ChangeIndicator from "./components/ChangeIndicator"
+import { card, sectionHeading } from "./styles"
 
 const App = () => {
   const [agencies, setAgencies] = useState([])
@@ -44,7 +45,7 @@ const App = () => {
   if (error) return <p className="p-8 text-red-600">Error: {error}</p>
 
   return (
-    <div className="min-h-screen p-6" style={{ backgroundColor: "#f2f2f2" }}>
+    <div className="min-h-screen p-6 bg-page-bg">
       <header className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-medium text-gray-900 bg-white rounded-xl p-3 shadow">
           eCFR Analyzer
@@ -75,8 +76,8 @@ const App = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: agency table */}
-        <div className="lg:col-span-1 bg-white rounded-xl shadow p-4 flex flex-col lg:max-h-[calc(100vh-6rem)] lg:sticky lg:top-6">
-          <h2 className="text-lg font-normal mb-3">Agencies</h2>
+        <div className={`${card} lg:col-span-1 flex flex-col lg:max-h-[calc(100vh-6rem)] lg:sticky lg:top-6`}>
+          <h2 className={sectionHeading}>Agencies</h2>
           <AgencyTable
             agencies={agencies}
             selectedSlug={selectedSlug}
@@ -86,8 +87,8 @@ const App = () => {
 
         {/* Right column: charts */}
         <div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="lg:col-span-2 bg-white rounded-xl shadow p-4">
-            <h2 className="text-lg font-normal mb-3">
+          <div className={`${card} lg:col-span-2`}>
+            <h2 className={sectionHeading}>
               Top 10 Agencies by Word Count
             </h2>
             <WordCountChart agencies={agencies} />
@@ -97,16 +98,16 @@ const App = () => {
             <ChangeIndicator agencyDetail={agencyDetail} />
           </div>
 
-          <div className="bg-white rounded-xl shadow p-4 min-h-[420px]">
-            <h2 className="text-lg font-normal mb-3">
+          <div className={`${card} min-h-[380px]`}>
+            <h2 className={sectionHeading}>
               Changes Over Time (Last 5 Years)
               {agencyDetail && ` - ${agencyDetail.name}`}
             </h2>
             <ChangesChart changeHistory={agencyDetail?.change_history} />
           </div>
 
-          <div className="bg-white rounded-xl shadow p-4 min-h-[420px]">
-            <h2 className="text-lg font-normal mb-3">
+          <div className={`${card} min-h-[380px]`}>
+            <h2 className={sectionHeading}>
               Removal Deficit (Last 12 Months)
               {agencyDetail && ` - ${agencyDetail.name}`}
             </h2>

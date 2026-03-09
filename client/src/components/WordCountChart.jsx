@@ -7,6 +7,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
+import { CHART_COLORS } from "../styles"
 
 const TOP_N = 10
 
@@ -46,7 +47,7 @@ const WordCountChart = ({ agencies }) => {
           formatter={(v) => v.toLocaleString()}
           labelFormatter={(_, payload) => payload[0]?.payload?.longName || _}
         />
-        <Bar dataKey="word_count" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+        <Bar dataKey="word_count" fill={CHART_COLORS.substantive} radius={[0, 4, 4, 0]} />
       </BarChart>
     </ResponsiveContainer>
   )

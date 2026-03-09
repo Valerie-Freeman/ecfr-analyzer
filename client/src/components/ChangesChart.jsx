@@ -7,12 +7,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts"
-
-const COLORS = {
-  substantive: "#3b82f6",
-  non_substantive: "#94a3b8",
-  removals: "#ef4444",
-}
+import { CHART_COLORS } from "../styles"
 
 const YEARS = 5
 
@@ -54,19 +49,19 @@ const ChangesChart = ({ changeHistory }) => {
         <Bar
           dataKey="substantive"
           stackId="changes"
-          fill={COLORS.substantive}
+          fill={CHART_COLORS.substantive}
           name="Substantive"
         />
         <Bar
           dataKey="non_substantive"
           stackId="changes"
-          fill={COLORS.non_substantive}
+          fill={CHART_COLORS.non_substantive}
           name="Non-substantive"
         />
         <Bar
           dataKey="removals"
           stackId="changes"
-          fill={COLORS.removals}
+          fill={CHART_COLORS.removals}
           name="Removals"
         />
       </BarChart>

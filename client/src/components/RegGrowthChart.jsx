@@ -1,11 +1,6 @@
 import { useMemo } from "react"
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts"
-
-const COLORS = {
-  substantive: "#3b82f6",
-  non_substantive: "#94a3b8",
-  removals: "#ef4444",
-}
+import { CHART_COLORS } from "../styles"
 
 const RegGrowthChart = ({ changeHistory }) => {
   const stats = useMemo(() => {
@@ -79,7 +74,7 @@ const RegGrowthChart = ({ changeHistory }) => {
     { name: "Removals", value: stats.removals },
   ].filter((d) => d.value > 0)
 
-  const colorMap = { Substantive: COLORS.substantive, "Non-substantive": COLORS.non_substantive, Removals: COLORS.removals }
+  const colorMap = { Substantive: CHART_COLORS.substantive, "Non-substantive": CHART_COLORS.non_substantive, Removals: CHART_COLORS.removals }
 
   return (
     <div className="space-y-4">

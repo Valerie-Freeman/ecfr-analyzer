@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --color-page-bg: #f2f2f2;
+}
+
 body {
   font-family: "Sora", sans-serif;
   font-weight: 300;
